@@ -1,0 +1,84 @@
+import cv2
+import numpy as np
+
+# Initialize the camera
+cap = cv2.VideoCapture(0)
+
+# Check if the camera is opened successfully
+if not cap.isOpened():
+    print("Error: Camera could not be opened.")
+    exit()
+
+# Allow the camera to warm up
+print("Adjust your cloak in the frame for background capture...")
+import time
+
+time.sleep(3)
+
+# Capture the background frame
+ret, background = cap.read()
+if not ret:
+    print("Failed to capture the background.")
+    cap.release()
+    exit()
+
+background = cv2.flip(background, 1)
+
+print("Background captured! You can now wear the cloak.")
+
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        print("Failed to read from the camera.")
+        break
+
+    # Flip the frame horizontally for a natural mirror effect
+    frame = cv2.flip(frame, 1)
+
+    try:
+        # Convert the frame from BGR to HSV
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+        # Define the color range for the cloak (e.g., red color)
+        lower_red1 = np.array([0, 120, 70])
+        upper_red1 = np.array([10, 255, 255])
+        lower_red2 = np.array([170, 120, 70])
+        upper_red2 = np.array([180, 255, 255])
+
+        # Create masks to detect the red color
+        mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+        mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+
+        # Combine masks for red color detection
+        mask = mask1 + mask2
+
+        # Refine the mask using morphological operations
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_DILATE, np.ones((3, 3), np.uint8))
+
+        # Invert the mask for detecting non-red regions
+        mask_inv = cv2.bitwise_not(mask)
+
+        # Segment the cloak area
+        cloak_area = cv2.bitwise_and(background, background, mask=mask)
+
+        # Segment the non-cloak area
+        non_cloak_area = cv2.bitwise_and(frame, frame, mask=mask_inv)
+
+        # Merge the two areas
+        final_output = cv2.addWeighted(cloak_area, 1, non_cloak_area, 1, 0)
+
+        # Display the final output
+        cv2.imshow("Harry Potter Cloak", final_output)
+
+    except cv2.error as e:
+        print(f"OpenCV Error: {e}")
+        break
+
+    # Exit on pressing 'm'
+    if cv2.waitKey(1) & 0xFF == ord('m'):
+        break
+
+# Release the camera and close all windows
+cap.release()
+cv2.destroyAllWindows()
